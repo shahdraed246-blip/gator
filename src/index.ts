@@ -1,16 +1,40 @@
 import { setUser } from "./config";
+import { createUser, getUserByName } from "./lib/db/queries/users";
 
-type CommandHandler = (cmdName: string, ...args: string[]) => void;
+type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
 type CommandsRegistry = Record<string, CommandHandler>;
 
-function handlerLogin(cmdName: string, ...args: string[]): void {
+async function handlerLogin(cmdName: string, ...args: string[]): Promise<void> {
   if (args.length === 0) {
     throw new Error(`usage: ${cmdName} <username>`);
   }
   const username = args[0];
+
+  const existingUser = await getUserByName(username);
+  if (!existingUser) {
+    throw new Error(`user ${username} does not exist`);
+  }
+
   setUser(username);
   console.log(`User has been set to ${username}`);
+}
+
+async function handlerRegister(cmdName: string, ...args: string[]): Promise<void> {
+  if (args.length === 0) {
+    throw new Error(`usage: ${cmdName} <username>`);
+  }
+  const username = args[0];
+
+  const existingUser = await getUserByName(username);
+  if (existingUser) {
+    throw new Error(`user ${username} already exists`);
+  }
+
+  const user = await createUser(username);
+  setUser(username);
+  console.log(`User ${username} was created`);
+  console.log(user);
 }
 
 function registerCommand(
@@ -21,21 +45,22 @@ function registerCommand(
   registry[cmdName] = handler;
 }
 
-function runCommand(
+async function runCommand(
   registry: CommandsRegistry,
   cmdName: string,
   ...args: string[]
-): void {
+): Promise<void> {
   const handler = registry[cmdName];
   if (!handler) {
     throw new Error(`unknown command: ${cmdName}`);
   }
-  handler(cmdName, ...args);
+  await handler(cmdName, ...args);
 }
 
-function main() {
+async function main() {
   const registry: CommandsRegistry = {};
   registerCommand(registry, "login", handlerLogin);
+  registerCommand(registry, "register", handlerRegister);
 
   const args = process.argv.slice(2);
   if (args.length < 1) {
@@ -46,7 +71,7 @@ function main() {
   const [cmdName, ...cmdArgs] = args;
 
   try {
-    runCommand(registry, cmdName, ...cmdArgs);
+    await runCommand(registry, cmdName, ...cmdArgs);
   } catch (err) {
     if (err instanceof Error) {
       console.error(err.message);
@@ -55,6 +80,8 @@ function main() {
     }
     process.exit(1);
   }
+
+  process.exit(0);
 }
 
 main();
