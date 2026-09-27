@@ -1,5 +1,6 @@
 import { setUser } from "./config";
 import { createUser, getUserByName } from "./lib/db/queries/users";
+import { createUser, getUserByName, deleteAllUsers } from "./lib/db/queries/users";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
@@ -37,6 +38,10 @@ async function handlerRegister(cmdName: string, ...args: string[]): Promise<void
   console.log(user);
 }
 
+async function handlerReset(cmdName: string, ...args: string[]): Promise<void> {
+  await deleteAllUsers();
+  console.log("Database has been reset");
+}
 function registerCommand(
   registry: CommandsRegistry,
   cmdName: string,
@@ -61,7 +66,7 @@ async function main() {
   const registry: CommandsRegistry = {};
   registerCommand(registry, "login", handlerLogin);
   registerCommand(registry, "register", handlerRegister);
-
+  registerCommand(registry, "reset", handlerReset);
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.error("usage: cli <command> [args...]");
