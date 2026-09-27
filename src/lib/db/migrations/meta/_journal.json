@@ -15,6 +15,13 @@
       "when": 1790531264176,
       "tag": "0001_rainy_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790540054949,
+      "tag": "0002_steep_sister_grimm",
+      "breakpoints": true
     }
   ]
 }
