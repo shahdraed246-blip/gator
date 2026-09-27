@@ -1,5 +1,7 @@
 import { setUser, readConfig } from "./config";
 import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users";
+import { fetchFeed } from "./lib/feed";
+
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
 type CommandsRegistry = Record<string, CommandHandler>;
@@ -59,7 +61,10 @@ async function handlerUsers(cmdName: string, ...args: string[]): Promise<void> {
     }
   }
 }
-
+async function handlerAgg(cmdName: string, ...args: string[]): Promise<void> {
+  const feed = await fetchFeed("https://www.wagslane.dev/index.xml");
+  console.log(JSON.stringify(feed, null, 2));
+}
 async function runCommand(
   registry: CommandsRegistry,
   cmdName: string,
@@ -78,7 +83,7 @@ async function main() {
   registerCommand(registry, "register", handlerRegister);
   registerCommand(registry, "reset", handlerReset);
   registerCommand(registry, "users", handlerUsers);
-
+  registerCommand(registry, "agg", handlerAgg);
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.error("usage: cli <command> [args...]");
