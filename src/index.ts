@@ -3,6 +3,8 @@ import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/qu
 import { fetchFeed } from "./lib/feed";
 import { createFeed } from "./lib/db/queries/feeds";
 import type { User, Feed } from "./lib/db/schema";
+import { createFeed, getFeeds } from "./lib/db/queries/feeds";
+
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
 type CommandsRegistry = Record<string, CommandHandler>;
@@ -94,6 +96,16 @@ async function handlerAddFeed(cmdName: string, ...args: string[]): Promise<void>
 }
 
 
+async function handlerFeeds(cmdName: string, ...args: string[]): Promise<void> {
+  const allFeeds = await getFeeds();
+
+  for (const feed of allFeeds) {
+    console.log(`* Name: ${feed.name}`);
+    console.log(`  URL:  ${feed.url}`);
+    console.log(`  User: ${feed.userName}`);
+  }
+}
+
 async function runCommand(
   registry: CommandsRegistry,
   cmdName: string,
@@ -114,6 +126,7 @@ async function main() {
   registerCommand(registry, "users", handlerUsers);
   registerCommand(registry, "agg", handlerAgg);
   registerCommand(registry, "addfeed", handlerAddFeed);  
+  registerCommand(registry, "feeds", handlerFeeds); 
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.error("usage: cli <command> [args...]");
