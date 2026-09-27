@@ -1,7 +1,5 @@
-import { setUser } from "./config";
-import { createUser, getUserByName } from "./lib/db/queries/users";
-import { createUser, getUserByName, deleteAllUsers } from "./lib/db/queries/users";
-
+import { setUser, readConfig } from "./config";
+import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users";
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
 type CommandsRegistry = Record<string, CommandHandler>;
@@ -49,6 +47,18 @@ function registerCommand(
 ): void {
   registry[cmdName] = handler;
 }
+async function handlerUsers(cmdName: string, ...args: string[]): Promise<void> {
+  const config = readConfig();
+  const allUsers = await getUsers();
+
+  for (const user of allUsers) {
+    if (user.name === config.currentUserName) {
+      console.log(`* ${user.name} (current)`);
+    } else {
+      console.log(`* ${user.name}`);
+    }
+  }
+}
 
 async function runCommand(
   registry: CommandsRegistry,
@@ -67,6 +77,8 @@ async function main() {
   registerCommand(registry, "login", handlerLogin);
   registerCommand(registry, "register", handlerRegister);
   registerCommand(registry, "reset", handlerReset);
+  registerCommand(registry, "users", handlerUsers);
+
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.error("usage: cli <command> [args...]");
