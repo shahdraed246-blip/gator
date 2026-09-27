@@ -8,6 +8,13 @@
       "when": 1790455210630,
       "tag": "0000_solid_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790531264176,
+      "tag": "0001_rainy_sasquatch",
+      "breakpoints": true
     }
   ]
 }
