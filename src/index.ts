@@ -1,9 +1,9 @@
 import { setUser, readConfig } from "./config";
 import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users";
 import { fetchFeed } from "./lib/feed";
-import { createFeed } from "./lib/db/queries/feeds";
+import { createFeed, getFeeds, getFeedByUrl } from "./lib/db/queries/feeds";
 import type { User, Feed } from "./lib/db/schema";
-import { createFeed, getFeeds } from "./lib/db/queries/feeds";
+import { createFeedFollow, getFeedFollowsForUser } from "./lib/db/queries/feed_follows";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
@@ -93,6 +93,45 @@ async function handlerAddFeed(cmdName: string, ...args: string[]): Promise<void>
   const feed = await createFeed(name, url, currentUser.id);
   console.log("Feed created successfully:");
   printFeed(feed, currentUser);
+  const feedFollow = await createFeedFollow(currentUser.id, feed.id);
+  console.log(`${feedFollow.userName} is now following ${feedFollow.feedName}`);
+
+}
+
+
+
+async function handlerFollow(cmdName: string, ...args: string[]): Promise<void> {
+  if (args.length < 1) {
+    throw new Error(`usage: ${cmdName} <url>`);
+  }
+  const [url] = args;
+
+  const config = readConfig();
+  const currentUser = await getUserByName(config.currentUserName);
+  if (!currentUser) {
+    throw new Error(`current user ${config.currentUserName} not found in database`);
+  }
+
+  const feed = await getFeedByUrl(url);
+  if (!feed) {
+    throw new Error(`feed with url ${url} not found`);
+  }
+
+  const feedFollow = await createFeedFollow(currentUser.id, feed.id);
+  console.log(`${feedFollow.userName} is now following ${feedFollow.feedName}`);
+}
+
+async function handlerFollowing(cmdName: string, ...args: string[]): Promise<void> {
+  const config = readConfig();
+  const currentUser = await getUserByName(config.currentUserName);
+  if (!currentUser) {
+    throw new Error(`current user ${config.currentUserName} not found in database`);
+  }
+
+  const follows = await getFeedFollowsForUser(currentUser.id);
+  for (const follow of follows) {
+    console.log(`* ${follow.feedName}`);
+  }
 }
 
 
@@ -127,7 +166,10 @@ async function main() {
   registerCommand(registry, "agg", handlerAgg);
   registerCommand(registry, "addfeed", handlerAddFeed);  
   registerCommand(registry, "feeds", handlerFeeds); 
-  const args = process.argv.slice(2);
+  registerCommand(registry, "follow", handlerFollow);
+  registerCommand(registry, "following", handlerFollowing); 
+
+ const args = process.argv.slice(2);
   if (args.length < 1) {
     console.error("usage: cli <command> [args...]");
     process.exit(1);
