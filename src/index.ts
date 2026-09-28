@@ -3,7 +3,7 @@ import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/qu
 import { fetchFeed } from "./lib/feed";
 import { createFeed, getFeeds, getFeedByUrl } from "./lib/db/queries/feeds";
 import type { User, Feed } from "./lib/db/schema";
-import { createFeedFollow, getFeedFollowsForUser } from "./lib/db/queries/feed_follows";
+import { createFeedFollow, getFeedFollowsForUser, deleteFeedFollow } from "./lib/db/queries/feed_follows";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
@@ -143,6 +143,20 @@ async function handlerFollowing(
   }
 }
 
+async function handlerUnfollow(
+  cmdName: string,
+  user: User,
+  ...args: string[]
+): Promise<void> {
+  if (args.length < 1) {
+    throw new Error(`usage: ${cmdName} <url>`);
+  }
+  const [url] = args;
+
+  await deleteFeedFollow(user.id, url);
+  console.log(`${user.name} unfollowed ${url}`);
+}
+
 async function handlerFeeds(cmdName: string, ...args: string[]): Promise<void> {
   const allFeeds = await getFeeds();
 
@@ -175,7 +189,7 @@ async function main() {
   registerCommand(registry, "feeds", handlerFeeds);
   registerCommand(registry, "follow", middlewareLoggedIn(handlerFollow));
   registerCommand(registry, "following", middlewareLoggedIn(handlerFollowing));
-
+  registerCommand(registry, "unfollow", middlewareLoggedIn(handlerUnfollow));
  const args = process.argv.slice(2);
   if (args.length < 1) {
     console.error("usage: cli <command> [args...]");
