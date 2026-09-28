@@ -1,7 +1,7 @@
 import { setUser, readConfig } from "./config";
 import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users";
 import { fetchFeed } from "./lib/feed";
-import { createFeed, getFeeds, getFeedByUrl } from "./lib/db/queries/feeds";
+import { createFeed, getFeeds, getFeedByUrl, markFeedFetched, getNextFeedToFetch } from "./lib/db/queries/feeds";
 import type { User, Feed } from "./lib/db/schema";
 import { createFeedFollow, getFeedFollowsForUser, deleteFeedFollow } from "./lib/db/queries/feed_follows";
 
@@ -81,11 +81,69 @@ async function handlerUsers(cmdName: string, ...args: string[]): Promise<void> {
     }
   }
 }
-async function handlerAgg(cmdName: string, ...args: string[]): Promise<void> {
-  const feed = await fetchFeed("https://www.wagslane.dev/index.xml");
-  console.log(JSON.stringify(feed, null, 2));
+function parseDuration(durationStr: string): number {
+  const regex = /^(\d+)(ms|s|m|h)$/;
+  const match = durationStr.match(regex);
+  if (!match) {
+    throw new Error(`invalid duration: ${durationStr} (examples: 500ms, 30s, 1m, 1h)`);
+  }
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  switch (unit) {
+    case "ms":
+      return value;
+    case "s":
+      return value * 1000;
+    case "m":
+      return value * 60 * 1000;
+    default:
+      return value * 60 * 60 * 1000;
+  }
 }
 
+function handleError(err: unknown): void {
+  console.error(`Error scraping feeds: ${err instanceof Error ? err.message : err}`);
+}
+
+async function scrapeFeeds(): Promise<void> {
+  const feed = await getNextFeedToFetch();
+  if (!feed) {
+    console.log("No feeds to fetch");
+    return;
+  }
+
+  console.log(`Fetching ${feed.name} (${feed.url})`);
+  await markFeedFetched(feed.id);
+
+  const data = await fetchFeed(feed.url);
+  for (const item of data.channel.item) {
+    console.log(`* ${item.title}`);
+  }
+}
+
+async function handlerAgg(cmdName: string, ...args: string[]): Promise<void> {
+  if (args.length < 1) {
+    throw new Error(`usage: ${cmdName} <time_between_reqs> (e.g. 30s, 1m)`);
+  }
+
+  const timeBetweenRequests = parseDuration(args[0]);
+  console.log(`Collecting feeds every ${args[0]}`);
+
+  scrapeFeeds().catch(handleError);
+
+  const interval = setInterval(() => {
+    scrapeFeeds().catch(handleError);
+  }, timeBetweenRequests);
+
+  await new Promise<void>((resolve) => {
+    process.on("SIGINT", () => {
+      console.log("Shutting down feed aggregator...");
+      clearInterval(interval);
+      resolve();
+    });
+  });
+}
 function printFeed(feed: Feed, user: User): void {
   console.log(`* ID:      ${feed.id}`);
   console.log(`* Created: ${feed.createdAt}`);
