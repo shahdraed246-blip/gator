@@ -22,6 +22,13 @@
       "when": 1790540054949,
       "tag": "0002_steep_sister_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790623384226,
+      "tag": "0003_vengeful_vanisher",
+      "breakpoints": true
     }
   ]
 }
