@@ -4,6 +4,7 @@ import { fetchFeed } from "./lib/feed";
 import { createFeed, getFeeds, getFeedByUrl, markFeedFetched, getNextFeedToFetch } from "./lib/db/queries/feeds";
 import type { User, Feed } from "./lib/db/schema";
 import { createFeedFollow, getFeedFollowsForUser, deleteFeedFollow } from "./lib/db/queries/feed_follows";
+import { createPost, getPostsForUser } from "./lib/db/queries/posts";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
@@ -117,9 +118,21 @@ async function scrapeFeeds(): Promise<void> {
   await markFeedFetched(feed.id);
 
   const data = await fetchFeed(feed.url);
+  let saved = 0;
   for (const item of data.channel.item) {
-    console.log(`* ${item.title}`);
+    const publishedAt = new Date(item.pubDate);
+    const post = await createPost({
+      title: item.title,
+      url: item.link,
+      description: item.description,
+      publishedAt: isNaN(publishedAt.getTime()) ? null : publishedAt,
+      feedId: feed.id,
+    });
+    if (post) {
+      saved++;
+    }
   }
+  console.log(`Saved ${saved} new posts from ${feed.name}`);
 }
 
 async function handlerAgg(cmdName: string, ...args: string[]): Promise<void> {
@@ -224,6 +237,31 @@ async function handlerFeeds(cmdName: string, ...args: string[]): Promise<void> {
     console.log(`  User: ${feed.userName}`);
   }
 }
+
+async function handlerBrowse(
+  cmdName: string,
+  user: User,
+  ...args: string[]
+): Promise<void> {
+  let limit = 2;
+  if (args.length >= 1) {
+    limit = parseInt(args[0], 10);
+    if (isNaN(limit) || limit < 1) {
+      throw new Error(`usage: ${cmdName} [limit]`);
+    }
+  }
+
+  const userPosts = await getPostsForUser(user.id, limit);
+  for (const post of userPosts) {
+    console.log(`${post.publishedAt?.toLocaleString() ?? "unknown date"} from ${post.feedName}`);
+    console.log(`--- ${post.title} ---`);
+    console.log(`    ${(post.description ?? "").slice(0, 200)}`);
+    console.log(`Link: ${post.url}`);
+    console.log("=====================================");
+  }
+}
+
+
 async function runCommand(
   registry: CommandsRegistry,
   cmdName: string,
@@ -248,6 +286,7 @@ async function main() {
   registerCommand(registry, "follow", middlewareLoggedIn(handlerFollow));
   registerCommand(registry, "following", middlewareLoggedIn(handlerFollowing));
   registerCommand(registry, "unfollow", middlewareLoggedIn(handlerUnfollow));
+  registerCommand(registry, "browse", middlewareLoggedIn(handlerBrowse));
  const args = process.argv.slice(2);
   if (args.length < 1) {
     console.error("usage: cli <command> [args...]");
