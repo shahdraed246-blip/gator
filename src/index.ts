@@ -9,6 +9,12 @@ type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
 type CommandsRegistry = Record<string, CommandHandler>;
 
+type UserCommandHandler = (
+  cmdName: string,
+  user: User,
+  ...args: string[]
+) => Promise<void>;
+
 async function handlerLogin(cmdName: string, ...args: string[]): Promise<void> {
   if (args.length === 0) {
     throw new Error(`usage: ${cmdName} <username>`);
@@ -52,6 +58,17 @@ function registerCommand(
 ): void {
   registry[cmdName] = handler;
 }
+
+function middlewareLoggedIn(handler: UserCommandHandler): CommandHandler {
+  return async (cmdName: string, ...args: string[]) => {
+    const config = readConfig();
+    const user = await getUserByName(config.currentUserName);
+    if (!user) {
+      throw new Error(`User ${config.currentUserName} not found`);
+    }
+    await handler(cmdName, user, ...args);
+  };
+}
 async function handlerUsers(cmdName: string, ...args: string[]): Promise<void> {
   const config = readConfig();
   const allUsers = await getUsers();
@@ -78,62 +95,53 @@ function printFeed(feed: Feed, user: User): void {
   console.log(`* User:    ${user.name}`);
 }
 
-async function handlerAddFeed(cmdName: string, ...args: string[]): Promise<void> {
+async function handlerAddFeed(
+  cmdName: string,
+  user: User,
+  ...args: string[]
+): Promise<void> {
   if (args.length < 2) {
     throw new Error(`usage: ${cmdName} <name> <url>`);
   }
   const [name, url] = args;
 
-  const config = readConfig();
-  const currentUser = await getUserByName(config.currentUserName);
-  if (!currentUser) {
-    throw new Error(`current user ${config.currentUserName} not found in database`);
-  }
-
-  const feed = await createFeed(name, url, currentUser.id);
+  const feed = await createFeed(name, url, user.id);
   console.log("Feed created successfully:");
-  printFeed(feed, currentUser);
-  const feedFollow = await createFeedFollow(currentUser.id, feed.id);
-  console.log(`${feedFollow.userName} is now following ${feedFollow.feedName}`);
+  printFeed(feed, user);
 
+  const feedFollow = await createFeedFollow(user.id, feed.id);
+  console.log(`${feedFollow.userName} is now following ${feedFollow.feedName}`);
 }
 
-
-
-async function handlerFollow(cmdName: string, ...args: string[]): Promise<void> {
+async function handlerFollow(
+  cmdName: string,
+  user: User,
+  ...args: string[]
+): Promise<void> {
   if (args.length < 1) {
     throw new Error(`usage: ${cmdName} <url>`);
   }
   const [url] = args;
-
-  const config = readConfig();
-  const currentUser = await getUserByName(config.currentUserName);
-  if (!currentUser) {
-    throw new Error(`current user ${config.currentUserName} not found in database`);
-  }
 
   const feed = await getFeedByUrl(url);
   if (!feed) {
     throw new Error(`feed with url ${url} not found`);
   }
 
-  const feedFollow = await createFeedFollow(currentUser.id, feed.id);
+  const feedFollow = await createFeedFollow(user.id, feed.id);
   console.log(`${feedFollow.userName} is now following ${feedFollow.feedName}`);
 }
 
-async function handlerFollowing(cmdName: string, ...args: string[]): Promise<void> {
-  const config = readConfig();
-  const currentUser = await getUserByName(config.currentUserName);
-  if (!currentUser) {
-    throw new Error(`current user ${config.currentUserName} not found in database`);
-  }
-
-  const follows = await getFeedFollowsForUser(currentUser.id);
+async function handlerFollowing(
+  cmdName: string,
+  user: User,
+  ...args: string[]
+): Promise<void> {
+  const follows = await getFeedFollowsForUser(user.id);
   for (const follow of follows) {
     console.log(`* ${follow.feedName}`);
   }
 }
-
 
 async function handlerFeeds(cmdName: string, ...args: string[]): Promise<void> {
   const allFeeds = await getFeeds();
@@ -144,7 +152,6 @@ async function handlerFeeds(cmdName: string, ...args: string[]): Promise<void> {
     console.log(`  User: ${feed.userName}`);
   }
 }
-
 async function runCommand(
   registry: CommandsRegistry,
   cmdName: string,
@@ -164,10 +171,10 @@ async function main() {
   registerCommand(registry, "reset", handlerReset);
   registerCommand(registry, "users", handlerUsers);
   registerCommand(registry, "agg", handlerAgg);
-  registerCommand(registry, "addfeed", handlerAddFeed);  
-  registerCommand(registry, "feeds", handlerFeeds); 
-  registerCommand(registry, "follow", handlerFollow);
-  registerCommand(registry, "following", handlerFollowing); 
+  registerCommand(registry, "addfeed", middlewareLoggedIn(handlerAddFeed));
+  registerCommand(registry, "feeds", handlerFeeds);
+  registerCommand(registry, "follow", middlewareLoggedIn(handlerFollow));
+  registerCommand(registry, "following", middlewareLoggedIn(handlerFollowing));
 
  const args = process.argv.slice(2);
   if (args.length < 1) {
